@@ -16,7 +16,7 @@ async def get_current_user(authorization: str = Header(...)) -> AuthenticatedUse
             detail={"code": "UNAUTHORIZED", "message": "Falta el header Authorization Bearer."},
         )
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             f"{settings.auth_service_url}/auth/validate",
             headers={"Authorization": authorization},

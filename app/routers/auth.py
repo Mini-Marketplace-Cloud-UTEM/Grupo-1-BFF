@@ -28,7 +28,7 @@ def _translate_user(g2_user: dict) -> dict:
 
 @router.post("/login")
 async def login(body: dict):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(f"{settings.auth_service_url}/auth/login", json=body)
 
     if response.status_code != 200:
@@ -39,7 +39,7 @@ async def login(body: dict):
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(authorization: str = Header(...)):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             f"{settings.auth_service_url}/auth/logout",
             headers={"Authorization": authorization},
@@ -53,7 +53,7 @@ async def logout(authorization: str = Header(...)):
 async def refresh(body: dict):
     g2_body = {"refresh_token": body["refreshToken"]}
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(f"{settings.auth_service_url}/auth/refresh", json=g2_body)
 
     if response.status_code != 200:
@@ -64,7 +64,7 @@ async def refresh(body: dict):
 
 @router.get("/me")
 async def me(authorization: str = Header(...)):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(
             f"{settings.auth_service_url}/auth/me",
             headers={"Authorization": authorization},

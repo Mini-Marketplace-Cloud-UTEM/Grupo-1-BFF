@@ -83,7 +83,7 @@ async def list_products(
 ):
     base_url = settings.catalog_service_url.rstrip("/")
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         if q:
             params = {"q": q, "page": page, "size": pageSize}
             if category:
@@ -111,7 +111,7 @@ async def list_products(
 async def get_product(product_id: str):
     base_url = settings.catalog_service_url.rstrip("/")
 
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(f"{base_url}/products/{product_id}", headers=_g3_headers())
 
     if response.status_code != 200:

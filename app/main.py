@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import FastAPI, HTTPException, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
@@ -23,6 +24,17 @@ async def http_exception_handler(request, exc: HTTPException):
         correlationId=request.headers.get("X-Correlation-Id"),
     )
     return JSONResponse(status_code=exc.status_code, content=jsonable_encoder(error))
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc: Exception):
+    code = "UPSTREAM_TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "INTERNAL_ERROR"
+    error = ErrorResponse(
+        code=code,
+        message="El servicio dependiente no respondió a tiempo." if code == "UPSTREAM_TIMEOUT" else "Error interno.",
+        correlationId=request.headers.get("X-Correlation-Id"),
+    )
+    return JSONResponse(status_code=status.HTTP_502_BAD_GATEWAY, content=jsonable_encoder(error))
 
 
 app.include_router(auth.router, prefix="/v1")
