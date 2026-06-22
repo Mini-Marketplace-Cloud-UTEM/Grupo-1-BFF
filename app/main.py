@@ -31,6 +31,11 @@ app.include_router(cart.router, prefix="/v1")
 app.include_router(orders.router, prefix="/v1")
 
 
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {"message": "Marketplace BFF (Grupo 1) is running. Ver /docs para el contrato."}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "g1-bff", "version": "1.0.0", "timestamp": datetime.now(timezone.utc)}
