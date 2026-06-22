@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import FastAPI, HTTPException, status
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.routers import auth, cart, catalog, orders
@@ -12,6 +13,18 @@ app = FastAPI(
     title="Marketplace BFF",
     description="Backend for Frontend - Grupo 1",
     version="1.0.0",
+)
+
+# El frontend (Vercel + localhost en desarrollo) llama directo al BFF desde
+# el navegador - sin esto, el preflight OPTIONS falla y fetch() reporta
+# "Failed to fetch" sin mas detalle. Se usan tokens Bearer en el header
+# Authorization (no cookies), asi que allow_credentials=False es seguro
+# incluso con origin "*".
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
