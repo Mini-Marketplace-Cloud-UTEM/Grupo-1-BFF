@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routers import auth, cart, catalog, orders
+from app.routers import auth, cart, catalog, orders, reports
 from app.schemas import ErrorResponse
 
 app = FastAPI(
@@ -54,6 +54,7 @@ app.include_router(auth.router, prefix="/v1")
 app.include_router(catalog.router, prefix="/v1")
 app.include_router(cart.router, prefix="/v1")
 app.include_router(orders.router, prefix="/v1")
+app.include_router(reports.router, prefix="/v1")
 
 
 @app.api_route("/", methods=["GET", "HEAD"])

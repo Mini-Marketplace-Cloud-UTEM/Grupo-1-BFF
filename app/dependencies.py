@@ -1,5 +1,5 @@
 import httpx
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from app.config import settings
 from app.schemas import AuthenticatedUser
@@ -30,3 +30,12 @@ async def get_current_user(authorization: str = Header(...)) -> AuthenticatedUse
 
     user = response.json()["user"]
     return AuthenticatedUser(id=user["id"], roles=user.get("roles", []), raw=user)
+
+
+async def require_admin(user: AuthenticatedUser = Depends(get_current_user)) -> AuthenticatedUser:
+    if "admin" not in user.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN", "message": "Se requiere rol admin."},
+        )
+    return user

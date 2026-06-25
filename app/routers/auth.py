@@ -6,6 +6,16 @@ from app.config import settings
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _raise_from(response: httpx.Response):
+    # G2 puede devolver un body no-JSON (ej. pagina de error de Render
+    # durante un cold start) - no asumir que response.json() siempre funciona.
+    try:
+        detail = response.json()
+    except ValueError:
+        detail = {"code": "UPSTREAM_ERROR", "message": "Respuesta invalida del servicio de Auth."}
+    raise HTTPException(status_code=response.status_code, detail=detail)
+
+
 def _translate_tokens(g2_response: dict) -> dict:
     # G2 responde en snake_case; el contrato BFF expone camelCase.
     return {
@@ -32,7 +42,7 @@ async def login(body: dict):
         response = await client.post(f"{settings.auth_service_url}/auth/login", json=body)
 
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        _raise_from(response)
 
     return _translate_tokens(response.json())
 
@@ -46,7 +56,7 @@ async def logout(authorization: str = Header(...)):
         )
 
     if response.status_code != 204:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        _raise_from(response)
 
 
 @router.post("/refresh")
@@ -57,7 +67,7 @@ async def refresh(body: dict):
         response = await client.post(f"{settings.auth_service_url}/auth/refresh", json=g2_body)
 
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        _raise_from(response)
 
     return _translate_tokens(response.json())
 
@@ -71,6 +81,6 @@ async def me(authorization: str = Header(...)):
         )
 
     if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        _raise_from(response)
 
     return _translate_user(response.json())

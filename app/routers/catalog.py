@@ -64,7 +64,10 @@ def _to_detail(p: dict) -> dict:
 
 
 def _raise_from(response: httpx.Response):
-    body = response.json()
+    try:
+        body = response.json()
+    except ValueError:
+        body = {}
     raise HTTPException(
         status_code=response.status_code,
         detail={"code": body.get("code", "ERROR"), "message": body.get("message", "Error en Grupo 3.")},
