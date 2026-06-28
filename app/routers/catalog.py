@@ -20,6 +20,13 @@ from app.config import settings
 # category_id en /products/search) - se ignoran en silencio por ahora
 # (queda en canonical-models.md como gap conocido). /categories tampoco
 # existe en G3 todavia, sigue como stub.
+#
+# 2026-06-28: el dinero sigue siendo entero, pero ahora de 64 bits
+# (int64/"long" en vez de 32 bits) - el evaluador de la asignatura exigio
+# este cambio de ancho en todo el proyecto (ver marketplace-contracts,
+# guia-y-lineamiento-de-desarrollo.md seccion 2). En Python no hay
+# distincion int32/int64 (int es de precision arbitraria), por eso
+# round() sigue siendo correcto aqui.
 
 router = APIRouter(tags=["catalog"])
 
