@@ -6,6 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.config import settings
 from app.routers import auth, cart, catalog, orders, reports
 from app.schemas import ErrorResponse
 
@@ -17,12 +18,14 @@ app = FastAPI(
 
 # El frontend (Vercel + localhost en desarrollo) llama directo al BFF desde
 # el navegador - sin esto, el preflight OPTIONS falla y fetch() reporta
-# "Failed to fetch" sin mas detalle. Se usan tokens Bearer en el header
-# Authorization (no cookies), asi que allow_credentials=False es seguro
-# incluso con origin "*".
+# "Failed to fetch" sin mas detalle. Restringimos a nuestros origenes: la
+# lista exacta de dev local + un regex para cualquier despliegue de Vercel
+# (produccion y previews de QA/Dev). Ya no usamos "*". Se usan tokens Bearer
+# (no cookies), por eso allow_credentials queda en False.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.frontend_origins.split(",") if o.strip()],
+    allow_origin_regex=settings.frontend_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
 )
