@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     auth_service_url: str = "https://grupo2-identidadusuario.onrender.com"
     catalog_service_url: str = "https://grupo-3-catalogo.onrender.com"
-    cart_service_url: str = "http://127.0.0.1:4011"
+    cart_service_url: str = "https://g4-carrito-checkout-inventario-y.onrender.com"
     orders_service_url: str = "http://127.0.0.1:4012"
     shipping_service_url: str = "http://127.0.0.1:4013"
     payments_service_url: str = "http://127.0.0.1:4014"
