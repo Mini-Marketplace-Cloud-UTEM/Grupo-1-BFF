@@ -36,6 +36,18 @@ def _translate_user(g2_user: dict) -> dict:
     }
 
 
+def _translate_login_user(g2_user: dict) -> dict:
+    # El login de G2 trae {id, name, email, roles, active}. Devolvemos lo
+    # util para el front (nombre para mostrar, roles para el panel admin)
+    # en la misma respuesta, para no obligar a un segundo /auth/me.
+    return {
+        "id": g2_user.get("id"),
+        "name": g2_user.get("name"),
+        "email": g2_user.get("email"),
+        "roles": g2_user.get("roles", []),
+    }
+
+
 @router.post("/login")
 async def login(body: dict):
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -44,7 +56,10 @@ async def login(body: dict):
     if response.status_code != 200:
         _raise_from(response)
 
-    return _translate_tokens(response.json())
+    data = response.json()
+    result = _translate_tokens(data)
+    result["user"] = _translate_login_user(data.get("user", {}))
+    return result
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
