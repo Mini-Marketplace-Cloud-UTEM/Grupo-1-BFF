@@ -1,9 +1,16 @@
 import httpx
 from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel
 
 from app.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class RegisterBody(BaseModel):
+    name: str
+    email: str
+    password: str
 
 
 def _raise_from(response: httpx.Response):
@@ -56,6 +63,26 @@ async def login(body: dict):
     if response.status_code != 200:
         _raise_from(response)
 
+    data = response.json()
+    result = _translate_tokens(data)
+    result["user"] = _translate_login_user(data.get("user", {}))
+    return result
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(body: RegisterBody):
+    # Solo reenviamos name/email/password: nunca un `role` desde el body (el
+    # rol lo asigna G2, un usuario no puede autoasignarse admin al registrarse).
+    payload = {"name": body.name, "email": body.email, "password": body.password}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(f"{settings.auth_service_url}/auth/register", json=payload)
+
+    if response.status_code not in (200, 201):
+        _raise_from(response)
+
+    # G2 devuelve la misma forma que el login (tokens + user), asi que el
+    # front puede iniciar sesion directo con la cuenta recien creada.
     data = response.json()
     result = _translate_tokens(data)
     result["user"] = _translate_login_user(data.get("user", {}))
