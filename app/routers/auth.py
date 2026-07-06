@@ -1,9 +1,16 @@
 import httpx
 from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel
 
 from app.config import settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+class RegisterBody(BaseModel):
+    name: str
+    email: str
+    password: str
 
 
 def _raise_from(response: httpx.Response):
@@ -36,6 +43,18 @@ def _translate_user(g2_user: dict) -> dict:
     }
 
 
+def _translate_login_user(g2_user: dict) -> dict:
+    # El login de G2 trae {id, name, email, roles, active}. Devolvemos lo
+    # util para el front (nombre para mostrar, roles para el panel admin)
+    # en la misma respuesta, para no obligar a un segundo /auth/me.
+    return {
+        "id": g2_user.get("id"),
+        "name": g2_user.get("name"),
+        "email": g2_user.get("email"),
+        "roles": g2_user.get("roles", []),
+    }
+
+
 @router.post("/login")
 async def login(body: dict):
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -44,7 +63,30 @@ async def login(body: dict):
     if response.status_code != 200:
         _raise_from(response)
 
-    return _translate_tokens(response.json())
+    data = response.json()
+    result = _translate_tokens(data)
+    result["user"] = _translate_login_user(data.get("user", {}))
+    return result
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(body: RegisterBody):
+    # Solo reenviamos name/email/password: nunca un `role` desde el body (el
+    # rol lo asigna G2, un usuario no puede autoasignarse admin al registrarse).
+    payload = {"name": body.name, "email": body.email, "password": body.password}
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(f"{settings.auth_service_url}/auth/register", json=payload)
+
+    if response.status_code not in (200, 201):
+        _raise_from(response)
+
+    # G2 devuelve la misma forma que el login (tokens + user), asi que el
+    # front puede iniciar sesion directo con la cuenta recien creada.
+    data = response.json()
+    result = _translate_tokens(data)
+    result["user"] = _translate_login_user(data.get("user", {}))
+    return result
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
