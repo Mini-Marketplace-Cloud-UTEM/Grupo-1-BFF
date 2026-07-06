@@ -5,10 +5,10 @@ class Settings(BaseSettings):
     auth_service_url: str = "https://grupo2-identidadusuario.onrender.com"
     catalog_service_url: str = "https://grupo-3-catalogo.onrender.com"
     cart_service_url: str = "https://g4-carrito-checkout-inventario-y.onrender.com"
-    orders_service_url: str = "http://127.0.0.1:4012"
-    shipping_service_url: str = "http://127.0.0.1:4013"
-    payments_service_url: str = "http://127.0.0.1:4014"
-    reports_service_url: str = "https://grupo-7-reporter-a-bash-y-streaming-production.up.railway.app"
+    orders_service_url: str = "https://grupo5-pedidos-mock-kdyl.onrender.com"
+    shipping_service_url: str = "https://g6-despacho.onrender.com"
+    payments_service_url: str = "https://g8-pagos-y-notificaciones.onrender.com"
+    reports_service_url: str = "https://g7-reporteria-bash-streaming-dev.onrender.com"
 
     # CORS: origenes permitidos para llamar al BFF desde el navegador.
     # `frontend_origins`: lista exacta separada por coma (dev local).
