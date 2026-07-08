@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routers import auth, cart, catalog, checkout, orders, reports
+from app.routers import admin_products, admin_users, auth, cart, catalog, checkout, orders, reports
 from app.schemas import ErrorResponse
 
 app = FastAPI(
@@ -59,6 +59,8 @@ app.include_router(cart.router, prefix="/v1")
 app.include_router(checkout.router, prefix="/v1")
 app.include_router(orders.router, prefix="/v1")
 app.include_router(reports.router, prefix="/v1")
+app.include_router(admin_products.router, prefix="/v1")
+app.include_router(admin_users.router, prefix="/v1")
 
 
 @app.api_route("/", methods=["GET", "HEAD"])
