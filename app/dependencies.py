@@ -1,3 +1,5 @@
+from typing import Optional
+
 import httpx
 from fastapi import Depends, Header, HTTPException, status
 
@@ -9,8 +11,11 @@ from app.schemas import AuthenticatedUser
 # ningun servicio verifica la firma del JWT localmente.
 
 
-async def get_current_user(authorization: str = Header(...)) -> AuthenticatedUser:
-    if not authorization.startswith("Bearer "):
+async def get_current_user(authorization: Optional[str] = Header(None)) -> AuthenticatedUser:
+    # Header(None) y no Header(...): si falta el header, FastAPI generaria un
+    # 422 de validacion con {detail}, rompiendo el error canonico. Aca falta
+    # de header y header malformado responden igual: 401 {code, message}.
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "UNAUTHORIZED", "message": "Falta el header Authorization Bearer."},

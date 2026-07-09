@@ -3,7 +3,7 @@ import uuid
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query
 
 from app.config import settings
 
@@ -18,8 +18,8 @@ from app.config import settings
 #
 # G3 no soporta minPrice/maxPrice/sortBy ni categoria por nombre (solo
 # category_id en /products/search) - se ignoran en silencio por ahora
-# (queda en canonical-models.md como gap conocido). /categories tampoco
-# existe en G3 todavia, sigue como stub.
+# (queda en canonical-models.md como gap conocido). GET /categories ya
+# existe en G3 (verificado en vivo 2026-07-07) y aca se proxea de verdad.
 #
 # 2026-06-28: el dinero sigue siendo entero, pero ahora de 64 bits
 # (int64/"long" en vez de 32 bits) - el evaluador de la asignatura exigio
@@ -54,6 +54,10 @@ def _to_summary(p: dict) -> dict:
         "imageUrl": (p.get("images") or [None])[0],
         "category": p.get("categoryName"),
         "inStock": p.get("stockVisible", 0) > 0,
+        # Campos extra para el panel admin (el front de cliente los ignora).
+        "categoryId": p.get("categoryId"),
+        "stock": p.get("stockVisible", 0),
+        "status": p.get("status"),
     }
 
 
@@ -130,10 +134,19 @@ async def get_product(product_id: str):
     return _to_detail(response.json())
 
 
-# G3 todavia no expone GET /categories - no hay endpoint real contra el que implementar esto.
-_NOT_IMPLEMENTED = {"code": "NOT_IMPLEMENTED", "message": "Grupo 3 todavia no expone un endpoint de categorias."}
-
-
 @router.get("/categories")
-async def list_categories():
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=_NOT_IMPLEMENTED)
+async def list_categories(page: int = Query(1, ge=1), pageSize: int = Query(100, ge=1, le=100)):
+    # pageSize default 100: el consumidor principal es el select del form de
+    # productos del panel admin, que necesita todas las categorias de una.
+    base_url = settings.catalog_service_url.rstrip("/")
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{base_url}/categories", params={"page": page, "size": pageSize}, headers=_g3_headers()
+        )
+
+    if response.status_code != 200:
+        _raise_from(response)
+
+    # G3 ya devuelve {data: [{id, name}], pagination} canonico - passthrough.
+    return response.json()
