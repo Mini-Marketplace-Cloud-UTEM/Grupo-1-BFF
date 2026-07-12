@@ -96,6 +96,12 @@ def _normalize_cart(c: dict) -> dict:
     }
 
 
+def _looks_like_cart(body) -> bool:
+    # Las transiciones de estado de G4 (reserva/activate) devuelven el carrito;
+    # complete devuelve el pedido. Solo normalizamos cuando es realmente un carrito.
+    return isinstance(body, dict) and ("cartId" in body or "items" in body)
+
+
 @router.post("")
 async def create_cart(
     authorization: Optional[str] = Header(None),
@@ -182,3 +188,72 @@ async def remove_item(
     if response.status_code == 204 or not response.content:
         return {"status": "OK"}
     return _normalize_cart(response.json())
+
+
+# ── Flujo de compra en dos pasos (contrato G4, aclarado 2026-07-11) ──
+# El viejo POST /v1/checkout generico queda deprecado; G4 lo va a borrar.
+
+
+@router.post("/{cart_id}/checkout")
+async def reserve_cart(
+    cart_id: str,
+    authorization: Optional[str] = Header(None),
+    x_correlation_id: Optional[str] = Header(None),
+    idempotency_key: Optional[str] = Header(None),
+):
+    # "Intencion de pedido": G4 reserva el stock y pasa el carrito ACTIVE -> PENDING.
+    # El front la llama al ENTRAR a la pantalla de datos de despacho (no al pagar).
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            f"{_g4_base()}/v1/cart/{cart_id}/checkout",
+            headers=_headers(authorization, x_correlation_id, idempotency_key, with_idempotency=True),
+        )
+    if response.status_code not in (200, 201, 202):
+        _raise_from(response)
+    if response.status_code == 204 or not response.content:
+        return {"status": "PENDING"}
+    body = response.json()
+    return _normalize_cart(body) if _looks_like_cart(body) else body
+
+
+@router.patch("/{cart_id}/activate")
+async def activate_cart(
+    cart_id: str,
+    authorization: Optional[str] = Header(None),
+    x_correlation_id: Optional[str] = Header(None),
+):
+    # "Salvavidas": libera la reserva (PENDING -> ACTIVE) cuando el usuario se
+    # devuelve de despacho o cancela el pago, para no dejar stock retenido.
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.patch(
+            f"{_g4_base()}/v1/cart/{cart_id}/activate",
+            headers=_headers(authorization, x_correlation_id),
+        )
+    if response.status_code not in (200, 202, 204):
+        _raise_from(response)
+    if response.status_code == 204 or not response.content:
+        return {"status": "ACTIVE"}
+    body = response.json()
+    return _normalize_cart(body) if _looks_like_cart(body) else body
+
+
+@router.patch("/{cart_id}/complete")
+async def complete_cart(
+    cart_id: str,
+    authorization: Optional[str] = Header(None),
+    x_correlation_id: Optional[str] = Header(None),
+    idempotency_key: Optional[str] = Header(None),
+):
+    # Cierre de la venta tras el pago exitoso: G4 confirma y genera el pedido
+    # (orquesta G5). Reemplaza al viejo POST /v1/checkout. Devolvemos el body
+    # tal cual porque aca viene el orderId que el front necesita mostrar/guardar.
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.patch(
+            f"{_g4_base()}/v1/cart/{cart_id}/complete",
+            headers=_headers(authorization, x_correlation_id, idempotency_key, with_idempotency=True),
+        )
+    if response.status_code not in (200, 201, 202):
+        _raise_from(response)
+    if response.status_code == 204 or not response.content:
+        return {"status": "OK"}
+    return response.json()
