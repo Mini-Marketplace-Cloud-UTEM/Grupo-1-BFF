@@ -54,6 +54,9 @@ def _to_summary(p: dict) -> dict:
         "imageUrl": (p.get("images") or [None])[0],
         "category": p.get("categoryName"),
         "inStock": p.get("stockVisible", 0) > 0,
+        # Tamaño del producto (talla de paquete XS..XXL). G3 lo agrego como
+        # campo del producto (lo consume G4 para cotizar el despacho con G6).
+        "size": p.get("size"),
         # Campos extra para el panel admin (el front de cliente los ignora).
         "categoryId": p.get("categoryId"),
         "stock": p.get("stockVisible", 0),

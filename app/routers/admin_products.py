@@ -32,10 +32,13 @@ from app.dependencies import require_admin
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
+# Tamaño del producto: G3 lo hizo OBLIGATORIO en POST /products (enum
+# XS..XXL). Lo usa G4 para armar el paquete y cotizar despacho con G6.
 class CreateProductBody(BaseModel):
     name: str
     price: int
     categoryId: str
+    size: str
     description: Optional[str] = None
     stockVisible: int = 0
     sku: Optional[str] = None
@@ -48,6 +51,7 @@ class UpdateProductBody(BaseModel):
     price: Optional[int] = None
     stockVisible: Optional[int] = None
     status: Optional[str] = None
+    size: Optional[str] = None
     images: Optional[list[str]] = None
 
 
@@ -109,6 +113,7 @@ def _to_admin_product(p: dict) -> dict:
         "categoryId": p.get("categoryId"),
         "categoryName": p.get("categoryName"),
         "sku": p.get("sku"),
+        "size": p.get("size"),
         "status": p.get("status"),
         "images": p.get("images", []),
         "createdAt": p.get("createdAt"),
