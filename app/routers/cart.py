@@ -37,6 +37,20 @@ class UpdateItemBody(BaseModel):
     quantity: int
 
 
+class CheckoutShippingAddress(BaseModel):
+    street: Optional[str] = None
+    city: Optional[str] = None
+    region: Optional[str] = None
+    country: Optional[str] = None
+    postalCode: Optional[str] = None
+
+
+class CheckoutBody(BaseModel):
+    # G4 (v2) exige la direccion para pasarsela a G5 al crear el pedido.
+    shippingAddress: Optional[CheckoutShippingAddress] = None
+    notes: Optional[str] = None
+
+
 def _g4_base() -> str:
     return settings.cart_service_url.rstrip("/")
 
@@ -190,30 +204,57 @@ async def remove_item(
     return _normalize_cart(response.json())
 
 
-# ── Flujo de compra en dos pasos (contrato G4, aclarado 2026-07-11) ──
-# El viejo POST /v1/checkout generico queda deprecado; G4 lo va a borrar.
+# ── Checkout real orquestado por G4 (v2, 2026-07-12) ──
+# G4 crea el pedido en G5 (con la direccion) e inicia el pago en G8, y devuelve
+# {status:"PENDING", paymentUrl}. El front redirige a paymentUrl (MercadoPago) y,
+# al cancelar, llama a cancel_checkout para liberar el stock.
 
 
 @router.post("/{cart_id}/checkout")
-async def reserve_cart(
+async def checkout(
     cart_id: str,
+    body: Optional[CheckoutBody] = None,
     authorization: Optional[str] = Header(None),
     x_correlation_id: Optional[str] = Header(None),
     idempotency_key: Optional[str] = Header(None),
 ):
-    # "Intencion de pedido": G4 reserva el stock y pasa el carrito ACTIVE -> PENDING.
-    # El front la llama al ENTRAR a la pantalla de datos de despacho (no al pagar).
-    async with httpx.AsyncClient(timeout=20.0) as client:
+    # Timeout amplio: G4 llama de forma sincrona a G5 (crear pedido) y G8 (iniciar
+    # pago / MercadoPago). Reenviamos {shippingAddress, notes} tal cual.
+    payload = body.model_dump(exclude_none=True) if body else None
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"{_g4_base()}/v1/cart/{cart_id}/checkout",
+            json=payload,
             headers=_headers(authorization, x_correlation_id, idempotency_key, with_idempotency=True),
         )
     if response.status_code not in (200, 201, 202):
         _raise_from(response)
     if response.status_code == 204 or not response.content:
         return {"status": "PENDING"}
-    body = response.json()
-    return _normalize_cart(body) if _looks_like_cart(body) else body
+    data = response.json()
+    # La respuesta ahora trae {status, paymentUrl} (no un carrito): pasa tal cual.
+    return _normalize_cart(data) if _looks_like_cart(data) else data
+
+
+@router.patch("/{cart_id}/cancel_checkout")
+async def cancel_checkout(
+    cart_id: str,
+    authorization: Optional[str] = Header(None),
+    x_correlation_id: Optional[str] = Header(None),
+):
+    # Libera el stock retenido por el checkout (G4). El front lo llama al cancelar
+    # en las pantallas de datos de despacho o de pago.
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.patch(
+            f"{_g4_base()}/v1/cart/{cart_id}/cancel_checkout",
+            headers=_headers(authorization, x_correlation_id),
+        )
+    if response.status_code not in (200, 202, 204):
+        _raise_from(response)
+    if response.status_code == 204 or not response.content:
+        return {"status": "CANCELLED"}
+    data = response.json()
+    return _normalize_cart(data) if _looks_like_cart(data) else data
 
 
 @router.patch("/{cart_id}/activate")
