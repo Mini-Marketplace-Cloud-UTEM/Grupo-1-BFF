@@ -73,17 +73,38 @@ def _headers(
     return headers
 
 
-def _raise_from(response: httpx.Response):
+def _raise_from(response: httpx.Response, fallback: str = "Error en el servicio de carrito (Grupo 4)."):
+    # Traduce el error de G4 a {code, message}. Ojo: el checkout de G4 orquesta
+    # G5/G8/G6, asi que un fallo aca NO es necesariamente "culpa de G4" — por eso
+    # priorizamos SIEMPRE la causa real que venga en el body antes de caer al
+    # fallback, y para el checkout el fallback es neutral (no culpa a un grupo).
     try:
         body = response.json()
     except ValueError:
         body = {}
-    # G4 puede devolver {code, message} o el {detail} por defecto de FastAPI.
-    code = body.get("code") or "CART_ERROR"
-    message = body.get("message") or (
-        body.get("detail") if isinstance(body.get("detail"), str) else None
-    ) or "Error en el servicio de carrito (Grupo 4)."
-    raise HTTPException(status_code=response.status_code, detail={"code": code, "message": message})
+
+    code = body.get("code")
+    message = body.get("message")
+    detail = body.get("detail")
+
+    if not message and isinstance(detail, str):
+        message = detail
+    # G4 usa la validacion por defecto de FastAPI: detail es una LISTA de
+    # {loc, msg, type}. La traducimos a un mensaje legible (con el campo real que
+    # falla, p.ej. "shippingAddress.postalCode: Field required") en vez de
+    # tragarnosla y culpar a G4.
+    if not message and isinstance(detail, list) and detail:
+        first = detail[0] if isinstance(detail[0], dict) else {}
+        loc = [str(x) for x in first.get("loc", []) if x != "body"]
+        field = ".".join(loc)
+        msg = first.get("msg") or "dato invalido"
+        message = f"{field}: {msg}" if field else msg
+        code = code or "VALIDATION_ERROR"
+
+    raise HTTPException(
+        status_code=response.status_code,
+        detail={"code": code or "CART_ERROR", "message": message or fallback},
+    )
 
 
 def _normalize_item(i: dict) -> dict:
@@ -228,7 +249,8 @@ async def checkout(
             headers=_headers(authorization, x_correlation_id, idempotency_key, with_idempotency=True),
         )
     if response.status_code not in (200, 201, 202):
-        _raise_from(response)
+        # El checkout orquesta G4+G5+G8+G6: no culpamos a un grupo por defecto.
+        _raise_from(response, fallback="No se pudo iniciar el checkout. Revisa los datos e intenta nuevamente.")
     if response.status_code == 204 or not response.content:
         return {"status": "PENDING"}
     data = response.json()
