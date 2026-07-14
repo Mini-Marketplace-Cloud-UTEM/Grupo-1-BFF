@@ -39,6 +39,38 @@ def _g3_headers() -> dict:
     }
 
 
+# Cache simple nombre(lower) -> categoryId de G3. El front filtra por NOMBRE de
+# categoria (su sidebar/landing usan nombres), pero G3 filtra por categoryId
+# (UUID). Resolvemos aca. Se refresca si falta la clave (categoria nueva); las
+# categorias casi no cambian, asi que basta.
+_category_id_cache: dict = {}
+
+
+async def _resolve_category_id(client: httpx.AsyncClient, base_url: str, category: str) -> Optional[str]:
+    if not category:
+        return None
+    # Si ya viene un UUID, usarlo tal cual (soporta ambos: nombre o id).
+    try:
+        uuid.UUID(str(category))
+        return str(category)
+    except (ValueError, AttributeError, TypeError):
+        pass
+    key = str(category).strip().lower()
+    if key in _category_id_cache:
+        return _category_id_cache[key]
+    try:
+        resp = await client.get(
+            f"{base_url}/categories", params={"page": 1, "size": 100}, headers=_g3_headers()
+        )
+        if resp.status_code == 200:
+            for c in resp.json().get("data", []):
+                if c.get("name") and c.get("id"):
+                    _category_id_cache[c["name"].strip().lower()] = c["id"]
+    except httpx.HTTPError:
+        return None
+    return _category_id_cache.get(key)
+
+
 def _slugify(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug
@@ -101,15 +133,22 @@ async def list_products(
     base_url = settings.catalog_service_url.rstrip("/")
 
     async with httpx.AsyncClient(timeout=20.0) as client:
+        # El front manda la categoria por NOMBRE (o 'all'); G3 filtra por
+        # categoryId (UUID). Resolvemos antes de reenviar (soporta tambien un id).
+        category_id = None
+        if category and str(category).strip().lower() != "all":
+            category_id = await _resolve_category_id(client, base_url, category)
+
         if q:
             params = {"q": q, "page": page, "size": pageSize}
-            if category:
-                params["category_id"] = category
+            if category_id:
+                params["categoryId"] = category_id
             response = await client.get(f"{base_url}/products/search", params=params, headers=_g3_headers())
         else:
-            response = await client.get(
-                f"{base_url}/products", params={"page": page, "size": pageSize}, headers=_g3_headers()
-            )
+            params = {"page": page, "size": pageSize}
+            if category_id:
+                params["categoryId"] = category_id
+            response = await client.get(f"{base_url}/products", params=params, headers=_g3_headers())
 
     if response.status_code != 200:
         _raise_from(response)
